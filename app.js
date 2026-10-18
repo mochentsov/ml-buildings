@@ -209,11 +209,6 @@
   }
   tabs("chkTabs", renderCheck);
 
-  // ---------- QR ----------
-  const url = location.protocol.startsWith("http") ? location.origin + location.pathname : "Ссылка появится после публикации на GitHub Pages";
-  $("url").textContent = url;
-  if (window.QRCode && location.protocol.startsWith("http")) new QRCode($("qr"), { text: url, width: 300, height: 300, colorDark: "#6e1a27", colorLight: "#ffffff" });
-
   // ---------- 3D ----------
   let scene = null, camera, renderer, controls, group;
   const box = $("scene");

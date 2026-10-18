@@ -103,26 +103,6 @@
         <table class="metrics" id="metrics"></table>
       </div>
     </section>
-
-    <section class="panel how">
-      <h2>Как это работает</h2>
-      <ol class="steps">
-        <li><b>Данные.</b> Набор UCI Energy Efficiency (Tsanas, Xifara, 2012): 768 вариантов здания, смоделированных в Ecotect, — 12 форм × 4 ориентации × разные доли и схемы остекления. Для каждого рассчитаны нагрузки на отопление и охлаждение.</li>
-        <li><b>Обучение.</b> Модель градиентного бустинга (400 деревьев решений, Python, scikit-learn) обучена на 80% вариантов; 20% отложены для честной проверки.</li>
-        <li><b>Перенос в браузер.</b> Деревья сохранены в файл <code>model.json</code>; прогноз считается прямо на этой странице, без сервера, — за доли миллисекунды.</li>
-        <li><b>Та же модель в Grasshopper.</b> Через компонент Hops модель подключается к параметрической модели в Rhino, и прогноз отображается прямо на геометрии.</li>
-      </ol>
-      <p class="hint">Модель учебная: она точна внутри диапазона обучающих данных и не заменяет нормативный теплотехнический расчёт.</p>
-    </section>
-
-    <section class="panel share">
-      <div>
-        <h2>Откройте на телефоне</h2>
-        <p>Наведите камеру на код, чтобы попробовать модель самостоятельно.</p>
-        <p class="url" id="url"></p>
-      </div>
-      <div id="qr" aria-label="QR-код ссылки на страницу"></div>
-    </section>
   </main>
 
   <footer class="wrap foot">
@@ -132,7 +112,6 @@
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

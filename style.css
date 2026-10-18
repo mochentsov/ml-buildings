@@ -74,13 +74,6 @@ select { width: 100%; padding: 8px; border: 1px solid var(--line); border-radius
 .metrics th { color: var(--muted); font-weight: 700; }
 .metrics tr.best td { color: var(--accent); font-weight: 700; }
 
-.how, .share { margin-top: 16px; }
-.steps { padding-left: 20px; margin: 0; }
-.steps li { margin-bottom: 8px; }
-code { background: var(--accent-soft); padding: 1px 5px; border-radius: 4px; font-size: 14px; }
-.share { display: flex; gap: 24px; align-items: center; justify-content: space-between; }
-.url { font-weight: 700; color: var(--accent); word-break: break-all; }
-#qr img, #qr canvas { display: block; width: 150px; height: 150px; }
 .foot { color: var(--muted); font-size: 13.5px; padding-top: 18px; padding-bottom: 28px; }
 
 @media (max-width: 1080px) {
@@ -91,6 +84,5 @@ code { background: var(--accent-soft); padding: 1px 5px; border-radius: 4px; fon
   .app, .grid2 { grid-template-columns: 1fr; }
   .viewer { min-height: 300px; }
   .imp .row { grid-template-columns: 130px 1fr 40px; }
-  .share { flex-direction: column; align-items: flex-start; }
   .lead { font-size: 16px; }
 }

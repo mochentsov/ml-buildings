@@ -211,6 +211,7 @@
 
   // ---------- 3D ----------
   let scene = null, camera, renderer, controls, group;
+  const treeObjs = [];
   const box = $("scene");
   const ramp = [[0xe8, 0xd6, 0xb4], [0xd6, 0x78, 0x64], [0x78, 0x14, 0x2a]];
   function heatColor(k) {
@@ -246,6 +247,21 @@
     const n = new THREE.Mesh(new THREE.ConeGeometry(1.2, 3.5, 3), new THREE.MeshLambertMaterial({ color: 0x9e2a3a }));
     n.rotation.x = -Math.PI / 2; n.position.set(0, 0.2, -42); scene.add(n);
     group = new THREE.Group(); scene.add(group);
+    // окружение: низкополигональные деревья
+    const leaf = new THREE.MeshLambertMaterial({ color: 0x9db08a, flatShading: true });
+    const leaf2 = new THREE.MeshLambertMaterial({ color: 0x7f9a70, flatShading: true });
+    const trunk = new THREE.MeshLambertMaterial({ color: 0x7a6455, flatShading: true });
+    const trees = [[-24, 14, 1], [-28, -6, 1.2], [-20, -24, 0.9], [22, -22, 1.1], [27, 4, 0.9], [24, 20, 1.2], [-6, -30, 1], [10, 28, 0.8], [-14, 27, 1.1], [31, -9, 0.8]];
+    trees.forEach(([x, z, s], i) => {
+      const t = new THREE.Group();
+      const tr = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.25, 2, 5), trunk); tr.position.y = 1; t.add(tr);
+      const crown = i % 2
+        ? new THREE.Mesh(new THREE.ConeGeometry(1.8, 4.6, 6), leaf2)
+        : new THREE.Mesh(new THREE.IcosahedronGeometry(2, 0), leaf);
+      crown.position.y = i % 2 ? 4 : 3.6; t.add(crown);
+      t.children.forEach((c) => { c.castShadow = true; });
+      t.position.set(x, 0, z); t.scale.setScalar(s); t.rotation.y = i; scene.add(t); treeObjs.push(t);
+    });
     const resize = () => {
       const w = box.clientWidth, h = box.clientHeight;
       renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
@@ -268,49 +284,135 @@
     const s = Math.sqrt(area); return [s, s];
   }
 
+  // материалы создаются один раз; цвет стен меняется по прогнозу
+  const M3 = {};
+  function mats() {
+    if (M3.wall) return M3;
+    const L = (color, o = {}) => new THREE.MeshLambertMaterial({ color, flatShading: true, ...o });
+    M3.wall = L(0xffffff);
+    M3.slab = L(0xf3eee8);
+    M3.trim = L(0xe2d8cf);
+    M3.plinth = L(0x8c8079);
+    M3.roof = L(0xcfc7c0);
+    M3.tech = L(0xb3aaa4);
+    M3.dark = L(0x4a4140);
+    M3.pv = new THREE.MeshPhongMaterial({ color: 0x24324a, shininess: 90, specular: 0x8899aa, flatShading: true });
+    M3.glass = new THREE.MeshPhongMaterial({ color: 0x3e6074, shininess: 100, specular: 0xbfd6e4, flatShading: true });
+    M3.frame = L(0x5d5452);
+    M3.path = new THREE.MeshLambertMaterial({ color: 0xd9cfc7 });
+    return M3;
+  }
+  function addBox(parent, w, h, d, x, y, z, mat, shadow = true) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+    m.position.set(x, y, z);
+    m.castShadow = shadow; m.receiveShadow = true;
+    parent.add(m);
+    return m;
+  }
+
   function rebuild() {
-    while (group.children.length) { const c = group.children.pop(); c.geometry && c.geometry.dispose(); }
+    group.traverse((c) => c.geometry && c.geometry.dispose());
+    group.clear();
+    const mt = mats();
     const g = currentGeo();
     const [a, b] = footprint(g);
     const h = Math.max(1, g[4]);
-    const mat = new THREE.MeshLambertMaterial({ color: heatColor(heatK) });
-    const body = new THREE.Mesh(new THREE.BoxGeometry(a, h, b), mat);
-    body.position.y = h / 2; body.castShadow = true; body.receiveShadow = true; group.add(body);
-    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(body.geometry), new THREE.LineBasicMaterial({ color: 0x6e1a27 }));
-    edges.position.copy(body.position); group.add(edges);
+    const FH = 3.5, floors = Math.max(1, Math.round(h / FH));
+    const P = 0.5; // высота цоколя
+    mt.wall.color.copy(heatColor(heatK));
+
+    // цоколь, этажи с выступающими плитами перекрытий, парапет
+    addBox(group, a + 0.5, P, b + 0.5, 0, P / 2, 0, mt.plinth);
+    for (let k = 0; k < floors; k++) {
+      const y0 = P + k * FH;
+      addBox(group, a, FH - 0.3, b, 0, y0 + (FH - 0.3) / 2, 0, mt.wall);
+      addBox(group, a + 0.36, 0.3, b + 0.36, 0, y0 + FH - 0.15, 0, mt.slab);
+    }
+    const top = P + floors * FH;
+    const pw = 0.25, ph = 0.7;
+    addBox(group, a + 0.36, ph, pw, 0, top + ph / 2, b / 2 + 0.18 - pw / 2, mt.slab);
+    addBox(group, a + 0.36, ph, pw, 0, top + ph / 2, -b / 2 - 0.18 + pw / 2, mt.slab);
+    addBox(group, pw, ph, b + 0.36, a / 2 + 0.18 - pw / 2, top + ph / 2, 0, mt.slab);
+    addBox(group, pw, ph, b + 0.36, -a / 2 - 0.18 + pw / 2, top + ph / 2, 0, mt.slab);
+    addBox(group, a - 0.1, 0.06, b - 0.1, 0, top + 0.03, 0, mt.roof, false);
+
+    // кровля: лестнично-лифтовой выход, вентагрегаты, солнечные панели
+    const cw = Math.min(4, a * 0.3), cd = Math.min(3.2, b * 0.3);
+    addBox(group, cw, 2.6, cd, -a / 2 + cw / 2 + 1.2, top + 1.3, -b / 2 + cd / 2 + 1.2, mt.tech);
+    addBox(group, cw + 0.3, 0.15, cd + 0.3, -a / 2 + cw / 2 + 1.2, top + 2.67, -b / 2 + cd / 2 + 1.2, mt.slab);
+    const ux = a / 2 - 2.2, uz = -b / 2 + 2;
+    addBox(group, 2.2, 1.2, 1.6, ux, top + 0.6, uz, mt.tech);
+    for (let i = 0; i < 2; i++) {
+      const fan = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.12, 8), mt.dark);
+      fan.position.set(ux - 0.5 + i, top + 1.26, uz); group.add(fan);
+    }
+    const rows = Math.max(0, Math.floor((b - 6) / 2.2));
+    const pvW = Math.max(0, a - 4);
+    for (let r = 0; r < rows && pvW > 2; r++) {
+      const pv = addBox(group, pvW, 0.08, 1.4, 0.6, top + 0.55, -b / 2 + 4.6 + r * 2.2, mt.pv);
+      pv.rotation.x = -0.35;
+    }
+
     // ориентация: главный фасад (+Z локально) смотрит на выбранную сторону света
     const ang = { 4: 0, 3: Math.PI / 2, 2: Math.PI, 5: -Math.PI / 2 }[state.orientation];
     group.rotation.y = ang;
-    // остекление: площадь окон = доля × площадь пола, распределение по сторонам света
-    const floors = Math.max(1, Math.round(h / 3.5));
-    const floorArea = a * b * floors;
-    const glassArea = state.glazing * floorArea;
-    const faces = [
-      { n: [0, 0, 1], len: b === b ? a : a, w: a, pos: (y, wh) => [0, y, b / 2 + 0.02], rot: 0 },
-      { n: [0, 0, -1], w: a, pos: (y) => [0, y, -b / 2 - 0.02], rot: Math.PI },
-      { n: [1, 0, 0], w: b, pos: (y) => [a / 2 + 0.02, y, 0], rot: Math.PI / 2 },
-      { n: [-1, 0, 0], w: b, pos: (y) => [-a / 2 - 0.02, y, 0], rot: -Math.PI / 2 },
-    ];
+    // деревья, попавшие в пятно здания или на дорожку, скрываем
+    treeObjs.forEach((t) => {
+      const x = t.position.x * Math.cos(ang) - t.position.z * Math.sin(ang);
+      const z = t.position.x * Math.sin(ang) + t.position.z * Math.cos(ang);
+      const inside = Math.abs(x) < a / 2 + 3.5 && Math.abs(z) < b / 2 + 3.5;
+      const onPath = Math.abs(x) < 4 && z > 0 && z < b / 2 + 19;
+      t.visible = !inside && !onPath;
+    });
     const worldDir = (nx, nz) => {
       const x = nx * Math.cos(ang) + nz * Math.sin(ang), z = -nx * Math.sin(ang) + nz * Math.cos(ang);
       return Math.abs(z) > Math.abs(x) ? (z > 0 ? 4 : 2) : (x > 0 ? 3 : 5);
     };
-    const glassMat = new THREE.MeshLambertMaterial({ color: 0x8fb4c9, transparent: true, opacity: 0.9, side: THREE.DoubleSide });
+
+    // остекление: площадь окон = доля × площадь пола, распределение по сторонам света;
+    // каждый фасад делится на простенки-пилястры и отдельные окна с рамой и подоконником
+    const floorArea = a * b * floors;
+    const glassArea = state.glazing * floorArea;
+    const faces = [
+      { n: [0, 1], w: a, d: b / 2, rot: 0, main: true },
+      { n: [0, -1], w: a, d: b / 2, rot: Math.PI },
+      { n: [1, 0], w: b, d: a / 2, rot: Math.PI / 2 },
+      { n: [-1, 0], w: b, d: a / 2, rot: -Math.PI / 2 },
+    ];
     faces.forEach((f) => {
-      const dir = worldDir(f.n[0], f.n[2]);
+      const fg = new THREE.Group(); fg.rotation.y = f.rot; group.add(fg);
+      const nb = Math.max(2, Math.round(f.w / 3.2)), bay = f.w / nb;
+      for (let i = 1; i < nb; i++) {
+        addBox(fg, 0.28, floors * FH - 0.3, 0.16, -f.w / 2 + i * bay, P + (floors * FH - 0.3) / 2, f.d + 0.08, mt.trim);
+      }
+      const dir = worldDir(f.n[0], f.n[1]);
       const share = state.dist === 0 ? 0 : state.dist === 1 ? 0.25 : (dir === state.dist ? 0.55 : 0.15);
-      const area = glassArea * share;
-      if (area <= 0) return;
-      const perFloor = area / floors;
-      const bandH = Math.min(3.0, perFloor / (f.w * 0.92));
+      const perFloor = (glassArea * share) / floors;
+      if (perFloor <= 0.05) return;
+      let ww = bay * 0.62, wh = perFloor / (nb * ww);
+      if (wh > 2.5) { wh = 2.5; ww = Math.min(bay * 0.9, perFloor / (nb * wh)); }
       for (let k = 0; k < floors; k++) {
-        const pane = new THREE.Mesh(new THREE.PlaneGeometry(f.w * 0.92, bandH), glassMat);
-        pane.position.set(...f.pos(k * 3.5 + 1.9));
-        pane.rotation.y = f.rot;
-        group.add(pane);
+        const yc = P + k * FH + 0.9 + wh / 2 + (k === 0 && f.main ? 0.25 : 0);
+        for (let i = 0; i < nb; i++) {
+          if (k === 0 && f.main && i === Math.floor(nb / 2)) continue; // место входа
+          const xc = -f.w / 2 + (i + 0.5) * bay;
+          addBox(fg, ww + 0.16, wh + 0.16, 0.06, xc, yc, f.d + 0.03, mt.frame, false);
+          addBox(fg, ww, wh, 0.06, xc, yc, f.d + 0.05, mt.glass, false);
+          addBox(fg, ww, 0.04, 0.08, xc, yc, f.d + 0.08, mt.frame, false); // импост
+          addBox(fg, ww + 0.3, 0.08, 0.3, xc, yc - wh / 2 - 0.12, f.d + 0.15, mt.slab, false);
+        }
+      }
+      if (f.main) {
+        // вход: остеклённые двери, козырёк, ступени
+        const dw = Math.min(2.4, bay * 0.8), xc = -f.w / 2 + (Math.floor(nb / 2) + 0.5) * bay;
+        addBox(fg, dw + 0.2, 2.6, 0.08, xc, P + 1.3, f.d + 0.04, mt.frame, false);
+        addBox(fg, dw, 2.4, 0.06, xc, P + 1.25, f.d + 0.07, mt.glass, false);
+        addBox(fg, dw + 1.6, 0.2, 1.8, xc, P + 3.0, f.d + 0.9, mt.slab);
+        addBox(fg, dw + 1.0, 0.25, 0.9, xc, 0.125, f.d + 0.7, mt.plinth);
+        const path = new THREE.Mesh(new THREE.PlaneGeometry(dw + 0.6, 16), mt.path);
+        path.rotation.x = -Math.PI / 2; path.position.set(xc, 0.02, f.d + 9.2); path.receiveShadow = true; fg.add(path);
       }
     });
-    group.children.forEach((c) => { if (c.material === glassMat) c.renderOrder = 1; });
   }
 
   shapeLabel();

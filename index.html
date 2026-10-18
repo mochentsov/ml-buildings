@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Прогноз энергопотребления здания — ML-демо</title>
+  <meta name="description" content="Демонстрационная модель машинного обучения: прогноз нагрузки на отопление и охлаждение здания по его форме и остеклению. Набор данных UCI Energy Efficiency.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=PT+Sans:wght@400;700&family=PT+Serif:wght@700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="wrap">
+      <span class="tag">Демонстрационная модель к докладу</span>
+      <h1>Прогноз энергопотребления здания</h1>
+      <p class="lead">Меняйте форму, ориентацию и остекление — модель машинного обучения мгновенно предсказывает нагрузку на отопление и охлаждение. Так работает суррогатная модель: она заменяет долгий энергетический расчёт ответом за миллисекунды.</p>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="app">
+      <aside class="panel controls" aria-label="Параметры здания">
+        <h2>Параметры здания</h2>
+
+        <div class="field">
+          <label for="shape">Форма здания <span class="val" id="shapeVal"></span></label>
+          <input type="range" id="shape" min="1" max="12" step="1" value="1">
+          <div class="hint" id="shapeInfo"></div>
+        </div>
+
+        <div class="field">
+          <span class="label">Ориентация главного фасада</span>
+          <div class="seg" id="orientation" role="radiogroup">
+            <button data-v="2" role="radio">С</button><button data-v="3" role="radio">В</button><button data-v="4" role="radio">Ю</button><button data-v="5" role="radio">З</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <span class="label">Доля остекления</span>
+          <div class="seg" id="glazing" role="radiogroup">
+            <button data-v="0" role="radio">0%</button><button data-v="0.1" role="radio">10%</button><button data-v="0.25" role="radio">25%</button><button data-v="0.4" role="radio">40%</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="dist">Распределение остекления</label>
+          <select id="dist">
+            <option value="0">нет остекления</option>
+            <option value="1">равномерно по всем фасадам</option>
+            <option value="2">больше на север</option>
+            <option value="3">больше на восток</option>
+            <option value="4">больше на юг</option>
+            <option value="5">больше на запад</option>
+          </select>
+        </div>
+
+        <details class="expert" id="expert">
+          <summary>Свободный режим (выход за пределы данных)</summary>
+          <p class="hint">Задайте геометрию произвольно. Модель обучена только на 12 типовых формах — вдали от них прогноз становится ненадёжным. Это тот самый риск, из-за которого Autodesk закрыла ML-модуль в Forma.</p>
+          <div id="freeSliders"></div>
+        </details>
+        <div class="warn" id="ood" hidden></div>
+      </aside>
+
+      <div class="viewer panel">
+        <div id="scene" aria-label="3D-модель здания"></div>
+        <div class="legend"><span>низкая нагрузка</span><i></i><span>высокая</span></div>
+        <div class="compass" aria-hidden="true"><div id="compass"><span class="needle"></span></div><span class="n">С</span></div>
+      </div>
+
+      <div class="panel results" aria-live="polite">
+        <h2>Прогноз модели</h2>
+        <div class="kpi">
+          <div class="kpi-label">Отопление</div>
+          <div class="kpi-val"><b id="heat">–</b> <small>кВт·ч/м² в год</small></div>
+          <div class="bar"><i id="heatBar"></i></div>
+          <div class="kpi-note" id="heatNote"></div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Охлаждение</div>
+          <div class="kpi-val"><b id="cool">–</b> <small>кВт·ч/м² в год</small></div>
+          <div class="bar"><i id="coolBar"></i></div>
+          <div class="kpi-note" id="coolNote"></div>
+        </div>
+        <div class="speed">Время прогноза: <b id="ms">–</b></div>
+        <p class="hint">Шкала — от минимального до максимального значения в обучающих данных (768 вариантов).</p>
+      </div>
+    </section>
+
+    <section class="grid2">
+      <div class="panel">
+        <h2>Что сильнее всего влияет на прогноз</h2>
+        <div class="tabs" id="impTabs"><button data-t="heating" class="on">Отопление</button><button data-t="cooling">Охлаждение</button></div>
+        <div id="importance" class="imp"></div>
+        <p class="hint">Важность признаков по методу перестановок: насколько ухудшается точность, если «перемешать» один параметр.</p>
+      </div>
+      <div class="panel">
+        <h2>Проверка на тестовых данных</h2>
+        <div class="tabs" id="chkTabs"><button data-t="heating" class="on">Отопление</button><button data-t="cooling">Охлаждение</button></div>
+        <svg id="scatter" viewBox="0 0 320 240" role="img" aria-label="Прогноз против расчёта на тестовой выборке"></svg>
+        <table class="metrics" id="metrics"></table>
+      </div>
+    </section>
+
+    <section class="panel how">
+      <h2>Как это работает</h2>
+      <ol class="steps">
+        <li><b>Данные.</b> Набор UCI Energy Efficiency (Tsanas, Xifara, 2012): 768 вариантов здания, смоделированных в Ecotect, — 12 форм × 4 ориентации × разные доли и схемы остекления. Для каждого рассчитаны нагрузки на отопление и охлаждение.</li>
+        <li><b>Обучение.</b> Модель градиентного бустинга (400 деревьев решений, Python, scikit-learn) обучена на 80% вариантов; 20% отложены для честной проверки.</li>
+        <li><b>Перенос в браузер.</b> Деревья сохранены в файл <code>model.json</code>; прогноз считается прямо на этой странице, без сервера, — за доли миллисекунды.</li>
+        <li><b>Та же модель в Grasshopper.</b> Через компонент Hops модель подключается к параметрической модели в Rhino, и прогноз отображается прямо на геометрии.</li>
+      </ol>
+      <p class="hint">Модель учебная: она точна внутри диапазона обучающих данных и не заменяет нормативный теплотехнический расчёт.</p>
+    </section>
+
+    <section class="panel share">
+      <div>
+        <h2>Откройте на телефоне</h2>
+        <p>Наведите камеру на код, чтобы попробовать модель самостоятельно.</p>
+        <p class="url" id="url"></p>
+      </div>
+      <div id="qr" aria-label="QR-код ссылки на страницу"></div>
+    </section>
+  </main>
+
+  <footer class="wrap foot">
+    <p>Моченцов Антон Андреевич, группа АГС-22-2, Санкт-Петербургский горный университет императрицы Екатерины II. Доклад «Машинное обучение для прогнозирования эксплуатационных характеристик зданий и принятия проектных решений», 2026.</p>
+    <p>Данные: A. Tsanas, A. Xifara. Energy Efficiency. UCI Machine Learning Repository, 2012 (CC BY 4.0).</p>
+  </footer>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

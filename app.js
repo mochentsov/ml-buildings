@@ -1,6 +1,6 @@
 // Демо: прогноз нагрузки на отопление и охлаждение моделью градиентного бустинга прямо в браузере
 (async function () {
-  const model = await fetch("model.json").then((r) => r.json());
+  const model = await fetch("model.json?v=3").then((r) => r.json());
   const $ = (id) => document.getElementById(id);
   const FEAT = ["compactness", "surface", "wall", "roof", "height", "orientation", "glazing", "glazing_dist"];
   const NAMES = Object.fromEntries(model.features.map((f) => [f.key, f.name]));
